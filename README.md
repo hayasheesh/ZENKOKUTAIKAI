@@ -1,9 +1,9 @@
 # 電気学会全国大会 (Anual Meeting of IEEJ)
 
 ## 最新版ダウンロード
-[![Build Thesis PDF](https://github.com/HashiReo/IEEJ_Paper_Template/actions/workflows/build.yml/badge.svg)](https://github.com/HashiReo/IEEJ_Paper_Template/actions/workflows/build.yml)
+[![Build Thesis PDF](https://github.com/hayasheesh/-/actions/workflows/build.yml/badge.svg)](https://github.com/hayasheesh/-/actions/workflows/build.yml)
 
-[📥 最新のPDFをダウンロード (main.pdf)](https://github.com/HashiReo/IEEJ_Paper_Template/releases/download/latest/main.pdf)
+[📥 最新のPDFをダウンロード (main.pdf)](https://github.com/hayasheesh/-/releases/download/latest/main.pdf)
 
 ## 概要
 概要があれば概要を記入してください。
