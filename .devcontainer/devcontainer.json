@@ -1,0 +1,11 @@
+{
+    "name": "Thesis LaTeX Env",
+    "build": { "dockerfile": "Dockerfile" },
+    "customizations": {
+        "vscode": {
+            "extensions": ["James-Yu.latex-workshop", "mosapride.zenkaku"],
+            "settings": { "terminal.integrated.defaultProfile.linux": "bash" }
+        }
+    },
+    "remoteUser": "root"
+}
