@@ -11,6 +11,7 @@
 \usepackage{caption}
 \usepackage{titlesec}
 \usepackage{cite}
+\usepackage{amsmath,amssymb}
 
 % --- 図表と本文の間隔設定 ---
 \setlength{\textfloatsep}{0pt} % ページ上下の図表と本文の間隔
@@ -28,7 +29,7 @@
 % セクション:
 % サイズ10pt, 行送り20pt
 \titleformat{\section}
-  {\fontsize{10pt}{20pt}\selectfont\mcfamily} 
+  {\fontsize{10pt}{20pt}\selectfont\mcfamily}
   {\thesection}{1em}{}
 % 上下の余白を0ptに設定
 \titlespacing{\section}{0pt}{0pt}{0pt}
@@ -58,24 +59,24 @@
 \twocolumn[
     \begin{center}
         \vspace*{10mm}
-        
+
         \parbox{134mm}{
             \centering
-            \fontsize{18pt}{28pt}\selectfont \mcfamily 
-            電気学会全国大会講演論文の書き方
+            \fontsize{18pt}{28pt}\selectfont \mcfamily
+            需給調整市場におけるEV--VPP低遅延指令追従のための階層型MADDPG制御
         }
-        
+
         \vspace{18pt}
 
         {\fontsize{12pt}{18pt}\selectfont \mcfamily
-        研究 花子\textsuperscript{*}, 電気 太郎, 学会 次郎 (○○○大学) \par}
+        林 弘辰\textsuperscript{*} (筑波大学) \par}
 
         \vspace{14pt}
 
         {\fontsize{9pt}{14pt}\selectfont
-        Preparation of Papers for National Convention of I.E.E. JAPAN \par
-        Hanako Kenkyu, Taro Denki, Jiro Gakkai (○○○University) \par}
-        
+        Hierarchical MADDPG Control for Low-Latency Dispatch Tracking of EV-Based VPPs in Balancing Markets \par
+        Koshin Hayashi (University of Tsukuba) \par}
+
         \vspace{14pt}
     \end{center}
 ]
@@ -84,95 +85,64 @@
 \fontsize{9pt}{14pt}\selectfont
 
 \section{まえがき}
-発表論文原稿は，A4原寸で印刷されます。執筆の時は以下の説明をよく読んだ上で，お使いのワードプロセッサ等で可能な範囲で指示に従って原稿をお書きください。なお，この説明書は，講演論文のレイアウトの見本になっていますので，参考にしてください。
+需給調整市場では，リソースアグリゲーターが系統運用者から与えられる指令信号に対して，リアルタイムかつ低遅延でリソースを制御し追従する能力が求められる場合がある．一方，EVを多数束ねたVPPを集中最適化で制御する場合，個別EV状態の収集・通信およびオンライン計算がボトルネックとなり，応答レイテンシ制約下では運用が困難になり得る．
 
-\section{12年大会からの変更点}
-刷り上りの論文集の体裁は従来通りですが，以下の点が変更になっていますので注意してください。
-\begin{itemize}
-    \item 15年大会からPDF投稿を可能としました。
-    \item 紙面投稿の場合専用の原稿用紙はありません。お手持ちのA4判白色の上質紙に印刷してください。
-    \item 提出いただいた原稿は，CD-ROMを作成する際の原版としても使用します。CD-ROMはカラーが可能ですが，印刷論文集は白黒となります。ただし黄色などは印刷時に出力されないので，著者が白黒でプリントアウトして確認して下さい。
-\end{itemize}
+集中LP/MILPによるVPPスケジューリングは日次計画等で広く検討されているが\cite{ShayeganRad2017}，中央制御が必要なため通信遅延も含めた実装上の制約を十分に扱えない場合がある．一方，MADDPGに代表されるMARL（Multi-Agent Reinforcement Learning）はCTDE（Centralized Training and Decentralized Execution）の性質を持ち，実行時に頻繁な全体通信や大規模最適化を要さずに協調方策を実装できる\cite{Lowe2020}．EV群制御にMARLを適用した先行研究として，ユーザ側QoS（充電費用やSoC等）に重点を置くもの\cite{Park2022}や，系統側の指標に重点を置くもの\cite{Fan2022}があるが，双方を同一のMARL枠組みで明示的に最適化・評価する設計は限定的である．
 
-\section{レイアウトと文字サイズ}
+そこで本研究では，充電ステーションをエージェントとする階層型MADDPG制御を設計し，\textbf{指令追従（系統側）とユーザ制約（出発時SoC）の同時最適化}を，分散実行可能な形で実現することを目的とする．さらに，オープンソースデータを用い，合計50台の普通充電器からなるVPPが日本の需給調整市場（二次調整力相当）へ参入する状況を想定してケーススタディを行う．
 
-\subsection{マージンとカラム幅}
-原稿用紙のマージンおよびカラム幅（全ページ共通）は，表\ref{tab:margins}のとおりです。特に上下左右のマージンは厳守してください。
+\section{提案手法}
 
-2カラム（2段組）とし，各コラムの幅，カラム間マージンは表\ref{tab:margins}のとおりです。本文の字詰は，1行あたり26文字程度とします。分量は，図面，写真等を含めて1枚ないし2枚，シンポジウムは4枚以内です。
+\subsection{制御モデルの全体像}
+本研究では，VPPを構成する複数の充電ステーションをエージェントとし，各エージェントが当該ステーション配下の複数EVの充放電出力を決定する階層型の構造を採る．実行時には，各ステーションは（i）自ステーションに接続中EVの状態（SoC，残滞在時間，目標SoC等）と（ii）市場から与えられる指令信号のみを用いて行動し，ステーション間の高頻度な個別通信を前提としない．本構成の概念図（原論文 Fig.\,2）を図\ref{fig:fig1}に示す．
 
-\begin{table}[ht]
-    \centering
-    \caption{マージン\\Table 1. Margins}
-    \label{tab:margins}
-    \begin{tabular}{lc}
-        \hline
-        上マージン & 30mm \\
-        下マージン & 27mm \\
-        左右マージン & 18mm \\
-        カラム間マージン & 7mm \\
-        カラム幅 & 83.5mm \\
-        \hline
-    \end{tabular}
-\end{table}
-
-\begin{table}[ht]
-    \centering
-    \caption{文字サイズ\\Table 2. Type sizes}
-    \label{tab:typesizes}
-    \begin{tabular}{lcc}
-        \hline
-         & サイズ & 行送り \\
-        \hline
-        論文タイトル & 18pt & 28pt \\
-        著者名 & 12pt & 18pt \\
-        英文タイトル著者所属名 & 9pt & 14pt \\
-        章タイトル & 10pt & 20pt \\
-        本文 & 9pt & 14pt \\
-        参考文献 & 8pt & 12pt \\
-        \hline
-    \end{tabular}
-\end{table}
-
-\subsection{配置}
-表題等は，この見本に従って次の1.～4.の順序で記載し，本文を書き始めてください。（2ページ目以降は，1.～3.不要）文字サイズと行送りは，表\ref{tab:typesizes}を参考にしてください。
-
-1. 表題：第1行中央に2カラム通しで書く（長ければ第2行も使う。第1行で済めば，第2行目は詰める）。表題1行目の左に，講演番号のスペースをあける。（テンプレートにおいては講演番号のスペースは設定してある）
-
-2. 著者名および勤務先：表題の下を1行あけて，次の行から中央に2カラム通しで書く。講演者名の右肩に「\textsuperscript{*}」印を付ける。
-
-3. 英文表題，氏名（所属）：著者名および勤務先の下を1行あけて，次の行から中央に2カラム通しで書く。
-
-4. 本文：英文による表題，氏名の下を1行あけて，次の行から書く。2ページは，上マージンに続いて第1行から本文を書く。
-
-\subsection{文献}
-文献は本文末尾に通し番号を付けて一括記載し，本文中の該当個所に引用番号を付けてください。文献の記載方法は，著者名，雑誌名，ページ，発行年の順序にしてください。
-(ex: \cite{Shahzadi1965}, \cite{Amano1975}と書くと文献番号が挿入できます。)
-
-\subsection{式および図}
-式および図は，図\ref{fig:example}および以下の記載例を参考にしてください。図面等を貼り付ける場合は，しわにならないように注意してください。また，図および表の説明には，英文を併記してください。
-
-% --- 図の例 ---
 \begin{figure}[H]
     \centering
     \includegraphics[width=80mm]{images/fig1.png}
-    \caption{図面の例\\Fig. 1. An example of figures}
-    \label{fig:example}
+    \caption{EV充放電制御モデルの全体像（原論文 Fig.\,2）\\Fig. 1. Overview of the EV charging/discharging control model}
+    \label{fig:fig1}
 \end{figure}
 
-% --- 式の例 ---
-\begin{equation}
-    E = RI
-\end{equation}
-\begin{equation}
-    V = Ri + L \frac{di}{dt}
-\end{equation}
+\subsection{階層型MADDPGの実装}
+本研究はMADDPG\cite{Lowe2020}を基礎とし，CTDEにより学習時は集中情報で価値を評価しつつ，実行時は各エージェントが局所観測のみで行動する．MADDPGで提唱されている決定論的方策勾配と1ステップTDターゲット（target critic を用いたブートストラップ）に基づき，actorおよびcriticを更新する．本研究の要点は，\textbf{局所目的（出発時SoC等）を評価するローカルcritic}と，\textbf{全体協調（指令追従）を評価する共有グローバルcritic}を併用する点にある．
+
+ローカルcriticはステーション$i$に関する局所情報（当該ステーションの観測および局所的に意味を持つ状態・行動）を入力として，出発時SoC等のユーザ制約に関わる価値を推定する．一方，グローバルcriticは全ステーションの情報（全体状態および全エージェント行動）を入力として，VPP集約としての指令追従に関わる価値を推定する．actorの更新では，MADDPGの方策勾配をローカル／グローバルの各criticに対して評価し，\textbf{両者を重み$w$で凸結合した方向}にパラメータ更新を行う．この重み付き勾配合成の考え方は，複数の価値関数からの信号を統合するDE-MADDPG型の拡張\cite{Zadaianchuk2020}を参考にしており，指令追従とユーザ制約のトレードオフを学習に組み込むために用いる．
+
+さらに，criticネットワークには目的志向のattention機構（goal-conditioned attention）を導入し，指令追従や出発時SoCの達成に寄与する状態・行動成分に焦点を当てる．attention自体はTransformerで用いられるscaled dot-product attention\cite{Vaswani2017}をベースとしつつ，本研究では目的（指令追従／ユーザ制約）に応じて重み付けの特徴が変化するよう設計している．
+
+\section{ケーススタディ}
+本研究は，日本の需給調整市場における二次調整力相当の参加を想定し\cite{JEPX2025,METI2019}，指令信号が5分ごとに到来する離散時間環境（1ステップ=5分）で評価する．1日を288ステップとして1エピソードを構成し，VPPは5ステーション，各10台の普通充電器（合計50台）からなるものとする．EVの到着分布および充電履歴等のデータには公開データセットを用いる．
+
+本ケーススタディでは，性能指標として（i）Target SoC satisfaction rate，（ii）charging dispatch tracking rate，（iii）discharging dispatch tracking rate を用いる．ここで，Target SoC satisfaction rate は，各EVの出発時刻において SoC がユーザの設定した目標値以上であった出発事象の割合として定義する．また tracking rate は，全288ステップの内，VPP集約出力が指令値の許容帯（本研究では入札幅$\times 0.1$の許容幅）内に収まったステップの割合として算出する．
+
+\section{結果}
+学習の進行に伴う性能指標の推移（原論文 Fig.\,5）を図\ref{fig:fig2}に示す．学習の初期段階から指令追従性能が改善し，収束近傍では安定した追従が観察される．収束付近の方策で評価した結果，Target SoC satisfaction rate は 63.5％，charging dispatch tracking rate は 99.5％，discharging dispatch tracking rate は 100.0％ であった．
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=80mm]{images/fig2.png}
+    \caption{学習に伴う性能指標の推移（原論文 Fig.\,5）\\Fig. 2. Performance metrics over training episodes}
+    \label{fig:fig2}
+\end{figure}
+
+代表的なテストエピソードにおけるステーション出力（原論文 Fig.\,6）を図\ref{fig:fig3}に示す．ステーション単位の分散実行でありながら，紫の破線により表現される集約出力が、黒の実線で示される系統指令値に追従する協調挙動が得られていることが確認できる．
+
+あわせて，EVの充放電機滞在時SoC曲線を確認したところ，出発ステップ前に目標SoCを達成しているEVが積極的に放電指令に協力したり、逆に目標SoCに達していないEVが優先的に充電するなど，ユーザ制約を考慮した柔軟な挙動が観察された．しかし、目標達成が困難なEVに対しては充電を放棄する、余裕があるEVに対しても過剰に放電しまうなどの課題も確認された。
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=80mm]{images/fig3.png}
+    \caption{代表テストにおけるステーション電力（原論文 Fig.\,6）\\Fig. 3. Station power in a representative test episode}
+    \label{fig:fig3}
+\end{figure}
+
+\section{まとめ}
+本稿では，需給調整市場におけるEV--VPPの低遅延制御を目的とし，階層型MADDPG制御を示した．ローカルcritic（ユーザ制約）と共有グローバルcritic（指令追従）を併用し，両者の評価に基づく方策更新を重み付きに統合することで，分散実行のまま二目的を同時に扱う枠組みを与えた．日本市場（二次調整力相当）を想定した50台規模のケーススタディにより，高い追従性能（99.5\%/100.0\%）と一定のユーザ満足（63.5\%）を確認し，集中制御がレイテンシ制約で困難となる状況における実装可能な代替案としての有効性を示した．しかし実用にはまだ距離があるため、ハイパーパラメータの最適化やルールベース制御との併用によるユーザ満足度指数の向上を今後の課題とする．
 
 % --- 参考文献 ---
 \begingroup
 \fontsize{8pt}{12pt}\selectfont
 \renewcommand{\refname}{文献}
-\bibliographystyle{junsrt}
+\bibliographystyle{unsrt}
 \bibliography{references}
 \endgroup
 
