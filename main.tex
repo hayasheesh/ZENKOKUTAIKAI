@@ -12,6 +12,7 @@
 \usepackage{titlesec}
 \usepackage{cite}
 \usepackage{amsmath,amssymb}
+\usepackage[none]{hyphenat} % 全体のハイフネーション抑止
 
 % --- 図表と本文の間隔設定 ---
 \setlength{\textfloatsep}{0pt} % ページ上下の図表と本文の間隔
@@ -54,6 +55,7 @@
 \date{}
 
 \begin{document}
+\pagestyle{empty} % ページ番号を消す
 
 % --- タイトル部分 ---
 \twocolumn[
@@ -80,63 +82,64 @@
         \vspace{14pt}
     \end{center}
 ]
+\thispagestyle{empty} % 1ページ目も確実にページ番号を消す
 
 % --- 本文開始 ---
 \fontsize{9pt}{14pt}\selectfont
 
 \section{まえがき}
-需給調整市場では，リソースアグリゲーターが系統運用者から与えられる指令信号に対して，リアルタイムかつ低遅延でリソースを制御し追従する能力が求められる場合がある．一方，EVを多数束ねたVPPを集中最適化で制御する場合，個別EV状態の収集・通信およびオンライン計算がボトルネックとなり，応答レイテンシ制約下では運用が困難になり得る．
+近年、リソースアグリゲーターが系統運用者から与えられる指令信号に対して、リアルタイムかつ低遅延でリソースを制御し追従する能力が求められる場合がある。一方、EVを多数束ねたVPPを集中最適化で制御する場合、個別EV状態の収集・通信およびオンライン計算がボトルネックとなり、応答レイテンシ制約下では運用が困難になり得る。
 
-集中LP/MILPによるVPPスケジューリングは日次計画等で広く検討されているが\cite{ShayeganRad2017}，中央制御が必要なため通信遅延も含めた実装上の制約を十分に扱えない場合がある．一方，MADDPGに代表されるMARL（Multi-Agent Reinforcement Learning）はCTDE（Centralized Training and Decentralized Execution）の性質を持ち，実行時に頻繁な全体通信や大規模最適化を要さずに協調方策を実装できる\cite{Lowe2020}．EV群制御にMARLを適用した先行研究として，ユーザ側QoS（充電費用やSoC等）に重点を置くもの\cite{Park2022}や，系統側の指標に重点を置くもの\cite{Fan2022}があるが，双方を同一のMARL枠組みで明示的に最適化・評価する設計は限定的である．
+集中LP/MILPによるVPPスケジューリングは日次計画等で広く検討されているが\cite{ShayeganRad2017}、中央制御が必要なため通信遅延も含めた実装上の制約を十分に扱えない場合がある。一方、MADDPGに代表されるMARL（Multi-Agent Reinforcement Learning）はCTDE（Centralized Training and Decentralized Execution）の性質を持ち、実行時に頻繁な全体通信や大規模最適化を要さずに協調方策を実装できる\cite{Lowe2017}。EV群制御にMARLを適用した先行研究として、ユーザ側QoS（充電費用やSoC等）に重点を置くもの\cite{Park2022}や、系統側の指標に重点を置くもの\cite{Fan2022}があるが、双方を同一のMARL枠組みで明示的に最適化・評価する設計は限定的である。
 
-そこで本研究では，充電ステーションをエージェントとする階層型MADDPG制御を設計し，\textbf{指令追従（系統側）とユーザ制約（出発時SoC）の同時最適化}を，分散実行可能な形で実現することを目的とする．さらに，オープンソースデータを用い，合計50台の普通充電器からなるVPPが日本の需給調整市場（二次調整力相当）へ参入する状況を想定してケーススタディを行う．
+そこで本研究では、充電ステーションをエージェントとする階層型MADDPG制御を設計し、指令追従（系統側）とユーザ制約（出発時SoC）の同時最適化を、分散実行可能な形で実現することを目的とする。さらに、オープンソースデータを用い、合計50台の普通充電器からなるVPPが日本の需給調整市場（二次調整力相当）へ参入する状況を想定してケーススタディを行う。
 
 \section{提案手法}
 
 \subsection{制御モデルの全体像}
-本研究では，VPPを構成する複数の充電ステーションをエージェントとし，各エージェントが当該ステーション配下の複数EVの充放電出力を決定する階層型の構造を採る．実行時には，各ステーションは（i）自ステーションに接続中EVの状態（SoC，残滞在時間，目標SoC等）と（ii）市場から与えられる指令信号のみを用いて行動し，ステーション間の高頻度な個別通信を前提としない．本構成の概念図（原論文 Fig.\,2）を図\ref{fig:fig1}に示す．
+本研究では、VPPを構成する複数の充電ステーションをエージェントとし、各エージェントが当該ステーション配下の複数EVの充放電出力を決定する階層型の構造を採る。実行時には、各ステーションは（i）自ステーションに接続中EVの状態（SoC、残滞在時間、目標SoC等）と（ii）市場から与えられる指令信号のみを用いて行動し、ステーション間の高頻度な個別通信を前提としない。本構成の概念図を図\ref{fig:fig1}に示す。
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=80mm]{images/fig1.png}
-    \caption{EV充放電制御モデルの全体像（原論文 Fig.\,2）\\Fig. 1. Overview of the EV charging/discharging control model}
+    \caption{EV充放電制御モデルの全体像\\Fig. 1. Overview of the EV charging/discharging control model}
     \label{fig:fig1}
 \end{figure}
 
 \subsection{階層型MADDPGの実装}
-本研究はMADDPG\cite{Lowe2020}を基礎とし，CTDEにより学習時は集中情報で価値を評価しつつ，実行時は各エージェントが局所観測のみで行動する．MADDPGで提唱されている決定論的方策勾配と1ステップTDターゲット（target critic を用いたブートストラップ）に基づき，actorおよびcriticを更新する．本研究の要点は，\textbf{局所目的（出発時SoC等）を評価するローカルcritic}と，\textbf{全体協調（指令追従）を評価する共有グローバルcritic}を併用する点にある．
+本研究はMADDPG\cite{Lowe2017}を基礎とし、CTDEにより学習時は集中情報で価値を評価しつつ、実行時は各エージェントが局所観測のみで行動する。MADDPGで提唱されている決定論的方策勾配と1ステップTDターゲット（target critic を用いたブートストラップ）に基づき、actorおよびcriticを更新する。本研究の要点は、局所目的（出発時SoC等）を評価するローカルcriticと、全体協調（指令追従）を評価する共有グローバルcriticを併用する点にある。
 
-ローカルcriticはステーション$i$に関する局所情報（当該ステーションの観測および局所的に意味を持つ状態・行動）を入力として，出発時SoC等のユーザ制約に関わる価値を推定する．一方，グローバルcriticは全ステーションの情報（全体状態および全エージェント行動）を入力として，VPP集約としての指令追従に関わる価値を推定する．actorの更新では，MADDPGの方策勾配をローカル／グローバルの各criticに対して評価し，\textbf{両者を重み$w$で凸結合した方向}にパラメータ更新を行う．この重み付き勾配合成の考え方は，複数の価値関数からの信号を統合するDE-MADDPG型の拡張\cite{Zadaianchuk2020}を参考にしており，指令追従とユーザ制約のトレードオフを学習に組み込むために用いる．
+ローカルcriticはステーション$i$に関する局所情報（当該ステーションの観測および局所的に意味を持つ状態・行動）を入力として、出発時SoC等のユーザ制約に関わる価値を推定する。一方、グローバルcriticは全ステーションの情報（全体状態および全エージェント行動）を入力として、VPP集約としての指令追従に関わる価値を推定する。actorの更新では、MADDPGの方策勾配をローカル／グローバルの各criticに対して評価し、両者を重み$w$で凸結合した方向にパラメータ更新を行う。この重み付き勾配合成の考え方は、複数の価値関数からの信号を統合するDE-MADDPG型の拡張\cite{Zadaianchuk2020}を参考にしており、指令追従とユーザ制約のトレードオフを学習に組み込むために用いる。
 
-さらに，criticネットワークには目的志向のattention機構（goal-conditioned attention）を導入し，指令追従や出発時SoCの達成に寄与する状態・行動成分に焦点を当てる．attention自体はTransformerで用いられるscaled dot-product attention\cite{Vaswani2017}をベースとしつつ，本研究では目的（指令追従／ユーザ制約）に応じて重み付けの特徴が変化するよう設計している．
+さらに、criticネットワークには目的志向のattention機構（goal-conditioned attention）を導入し、指令追従や出発時SoCの達成に寄与する状態・行動成分に焦点を当てる。attention自体はTransformerで用いられるscaled dot-product attention\cite{Vaswani2017}をベースとしつつ、本研究では目的（指令追従／ユーザ制約）に応じて重み付けの特徴が変化するよう設計している．
 
 \section{ケーススタディ}
-本研究は，日本の需給調整市場における二次調整力相当の参加を想定し\cite{JEPX2025,METI2019}，指令信号が5分ごとに到来する離散時間環境（1ステップ=5分）で評価する．1日を288ステップとして1エピソードを構成し，VPPは5ステーション，各10台の普通充電器（合計50台）からなるものとする．EVの到着分布および充電履歴等のデータには公開データセットを用いる．
+本研究は、日本の需給調整市場における二次調整力相当の参加を想定し\cite{JEPX2025,METI2019}、指令信号が5分ごとに到来する離散時間環境（1ステップ=5分）で評価する。1日を288ステップとして1エピソードを構成し、VPPは5ステーション、各10台の普通充電器（合計50台）からなるものとする。EVの到着分布および充電履歴等のデータには公開データセットを用いる。
 
-本ケーススタディでは，性能指標として（i）Target SoC satisfaction rate，（ii）charging dispatch tracking rate，（iii）discharging dispatch tracking rate を用いる．ここで，Target SoC satisfaction rate は，各EVの出発時刻において SoC がユーザの設定した目標値以上であった出発事象の割合として定義する．また tracking rate は，全288ステップの内，VPP集約出力が指令値の許容帯（本研究では入札幅$\times 0.1$の許容幅）内に収まったステップの割合として算出する．
+本ケーススタディでは、性能指標として（i）Target SoC satisfaction rate、（ii）charging dispatch tracking rate、（iii）discharging dispatch tracking rate を用いる。ここで、Target SoC satisfaction rate は、各EVの出発時刻において SoC がユーザの設定した目標値以上であった出発事象の割合として定義する。また tracking rate は、全288ステップの内、VPP集約出力が指令値の許容帯（本研究では入札幅$\times 0.1$の許容幅）内に収まったステップの割合として算出する．
 
 \section{結果}
-学習の進行に伴う性能指標の推移（原論文 Fig.\,5）を図\ref{fig:fig2}に示す．学習の初期段階から指令追従性能が改善し，収束近傍では安定した追従が観察される．収束付近の方策で評価した結果，Target SoC satisfaction rate は 63.5％，charging dispatch tracking rate は 99.5％，discharging dispatch tracking rate は 100.0％ であった．
+学習の進行に伴う性能指標の推移を図\ref{fig:fig2}に示す。学習の初期段階から指令追従性能が改善し、収束近傍では安定した追従が観察される。収束付近の方策で評価した結果、Target SoC satisfaction rate は 63.5％、charging dispatch tracking rate は 99.5％、discharging dispatch tracking rate は 100.0％ であった．
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=80mm]{images/fig2.png}
-    \caption{学習に伴う性能指標の推移（原論文 Fig.\,5）\\Fig. 2. Performance metrics over training episodes}
+    \caption{学習に伴う性能指標の推移\\Fig. 2. Performance metrics over training episodes}
     \label{fig:fig2}
 \end{figure}
 
-代表的なテストエピソードにおけるステーション出力（原論文 Fig.\,6）を図\ref{fig:fig3}に示す．ステーション単位の分散実行でありながら，紫の破線により表現される集約出力が、黒の実線で示される系統指令値に追従する協調挙動が得られていることが確認できる．
+代表的なテストエピソードにおけるステーション出力を図\ref{fig:fig3}に示す。ステーション単位の分散実行でありながら、紫の破線により表現される集約出力が、黒の実線で示される系統指令値に追従する協調挙動が得られていることが確認できる．
 
-あわせて，EVの充放電機滞在時SoC曲線を確認したところ，出発ステップ前に目標SoCを達成しているEVが積極的に放電指令に協力したり、逆に目標SoCに達していないEVが優先的に充電するなど，ユーザ制約を考慮した柔軟な挙動が観察された．しかし、目標達成が困難なEVに対しては充電を放棄する、余裕があるEVに対しても過剰に放電しまうなどの課題も確認された。
+あわせて、EVの充放電器滞在時のSoC曲線を確認したところ、出発ステップ前に目標SoCを達成しているEVが積極的に放電指令に協力したり、逆に目標SoCに達していないEVが優先的に充電するなど、ユーザ制約を考慮した柔軟な挙動が観察された。しかし、目標達成が困難なEVに対しては充電を放棄する、余裕があるEVに対しても過剰に放電してしまうなどの課題も確認された。
 \begin{figure}[H]
     \centering
     \includegraphics[width=80mm]{images/fig3.png}
-    \caption{代表テストにおけるステーション電力（原論文 Fig.\,6）\\Fig. 3. Station power in a representative test episode}
+    \caption{代表テストにおけるステーション電力\\Fig. 3. Station power in a representative test episode}
     \label{fig:fig3}
 \end{figure}
 
 \section{まとめ}
-本稿では，需給調整市場におけるEV--VPPの低遅延制御を目的とし，階層型MADDPG制御を示した．ローカルcritic（ユーザ制約）と共有グローバルcritic（指令追従）を併用し，両者の評価に基づく方策更新を重み付きに統合することで，分散実行のまま二目的を同時に扱う枠組みを与えた．日本市場（二次調整力相当）を想定した50台規模のケーススタディにより，高い追従性能（99.5\%/100.0\%）と一定のユーザ満足（63.5\%）を確認し，集中制御がレイテンシ制約で困難となる状況における実装可能な代替案としての有効性を示した．しかし実用にはまだ距離があるため、ハイパーパラメータの最適化やルールベース制御との併用によるユーザ満足度指数の向上を今後の課題とする．
+本稿では、需給調整市場におけるEV--VPPの低遅延制御を目的とし、階層型MADDPG制御を示した。ローカルcritic（ユーザ制約）と共有グローバルcritic（指令追従）を併用し、両者の評価に基づく方策更新を重み付きに統合することで、分散実行のまま二目的を同時に扱う枠組みを与えた。日本市場（二次調整力相当）を想定した50台規模のケーススタディにより、高い追従性能（99.5\%/100.0\%）と一定のユーザ満足（63.5\%）を確認し、集中制御がレイテンシ制約で困難となる状況における実装可能な代替案としての有効性を示した。しかし実用にはまだ距離があるため、ハイパーパラメータの最適化やルールベース制御との併用によるユーザ満足度指数の向上を今後の課題とする．
 
 % --- 参考文献 ---
 \begingroup
