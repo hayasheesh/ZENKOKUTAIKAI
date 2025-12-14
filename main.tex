@@ -65,7 +65,7 @@
         \parbox{134mm}{
             \centering
             \fontsize{18pt}{28pt}\selectfont \mcfamily
-            需給調整市場におけるEV--VPP低遅延指令追従のための階層型MADDPG制御
+            マルチエージェント強化学習によるEV群VPPの充放電協調制御
         }
 
         \vspace{18pt}
@@ -76,7 +76,7 @@
         \vspace{14pt}
 
         {\fontsize{9pt}{14pt}\selectfont
-        Hierarchical MADDPG Control for Low-Latency Dispatch Tracking of EV-Based VPPs in Balancing Markets \par
+        Coordinated Charging and Discharging Control of an EV-Based VPP Using Multi-Agent Reinforcement Learning \par
         Koshin Hayashi (University of Tsukuba) \par}
 
         \vspace{14pt}
@@ -88,9 +88,9 @@
 \fontsize{9pt}{14pt}\selectfont
 
 \section{まえがき}
-近年、リソースアグリゲーターが系統運用者から与えられる指令信号に対して、リアルタイムかつ低遅延でリソースを制御し追従する能力が求められる場合がある。一方、EVを多数束ねたVPPを集中最適化で制御する場合、個別EV状態の収集・通信およびオンライン計算がボトルネックとなり、応答レイテンシ制約下では運用が困難になり得る。
+VPPの需給調整市場参入では、リソースアグリゲーターが系統運用者から与えられる指令信号に対して、リアルタイムかつ低遅延でリソースを制御し追従する能力が求められる場合がある。一方、EVを多数束ねたVPPを集中最適化で制御する場合、個別EV状態の収集・通信およびオンライン計算がボトルネックとなり、応答レイテンシ制約下では運用が困難になり得る。
 
-集中LP/MILPによるVPPスケジューリングは日次計画等で広く検討されているが\cite{ShayeganRad2017}、中央制御が必要なため通信遅延も含めた実装上の制約を十分に扱えない場合がある。一方、MADDPGに代表されるMARL（Multi-Agent Reinforcement Learning）はCTDE（Centralized Training and Decentralized Execution）の性質を持ち、実行時に頻繁な全体通信や大規模最適化を要さずに協調方策を実装できる\cite{Lowe2017}。EV群制御にMARLを適用した先行研究として、ユーザ側QoS（充電費用やSoC等）に重点を置くもの\cite{Park2022}や、系統側の指標に重点を置くもの\cite{Fan2022}があるが、双方を同一のMARL枠組みで明示的に最適化・評価する設計は限定的である。
+例えば情報をアグリゲータが集約し、Linear Programming (LP)により各EVの行動を決定するVPPスケジューリングは日次計画等で広く検討されているが\cite{ShayeganRad2017}、中央制御が必要なため通信遅延、計算遅延により市場の要求する応答時間内のデマンドレスポンスが間に合わない場合がある。一方、Multi-Agent Deep Deterministic Policy Gradient (MADDPG) に代表されるMARL（Multi-Agent Reinforcement Learning）はCTDE（Centralized Training and Decentralized Execution）の性質を持ち、実行時に頻繁な全体通信や大規模最適化を要さずに協調方策を実装できる\cite{Lowe2017}。EV群制御にMARLを適用した先行研究として、ユーザ側QoS（充電費用やSoC等）に重点を置くもの\cite{Park2022}や、系統側の指標に重点を置くもの\cite{Fan2022}があるが、双方を同一のMARL枠組みで明示的に最適化・評価する設計は限定的である。
 
 そこで本研究では、充電ステーションをエージェントとする階層型MADDPG制御を設計し、指令追従（系統側）とユーザ制約（出発時SoC）の同時最適化を、分散実行可能な形で実現することを目的とする。さらに、オープンソースデータを用い、合計50台の普通充電器からなるVPPが日本の需給調整市場（二次調整力相当）へ参入する状況を想定してケーススタディを行う。
 
@@ -107,7 +107,7 @@
 \end{figure}
 
 \subsection{階層型MADDPGの実装}
-本研究はMADDPG\cite{Lowe2017}を基礎とし、CTDEにより学習時は集中情報で価値を評価しつつ、実行時は各エージェントが局所観測のみで行動する。MADDPGで提唱されている決定論的方策勾配と1ステップTDターゲット（target critic を用いたブートストラップ）に基づき、actorおよびcriticを更新する。本研究の要点は、局所目的（出発時SoC等）を評価するローカルcriticと、全体協調（指令追従）を評価する共有グローバルcriticを併用する点にある。
+本モデルはMADDPG\cite{Lowe2017}を基礎とし、学習時は集中情報で価値を評価しつつ、実行時は各エージェントが局所観測のみで行動する。基本的にはMADDPGで提唱されている決定論的方策勾配と1ステップTDターゲット（target critic を用いたブートストラップ）に基づき、actorおよびcriticを更新する。ただし本研究では全体目標と個別目標を分離して扱うため、局所目的（出発時SoC）を評価するローカルcriticと、全体協調（指令追従）を評価する共有グローバルcriticを併用し、actorを更新する。
 
 ローカルcriticはステーション$i$に関する局所情報（当該ステーションの観測および局所的に意味を持つ状態・行動）を入力として、出発時SoC等のユーザ制約に関わる価値を推定する。一方、グローバルcriticは全ステーションの情報（全体状態および全エージェント行動）を入力として、VPP集約としての指令追従に関わる価値を推定する。actorの更新では、MADDPGの方策勾配をローカル／グローバルの各criticに対して評価し、両者を重み$w$で凸結合した方向にパラメータ更新を行う。この重み付き勾配合成の考え方は、複数の価値関数からの信号を統合するDE-MADDPG型の拡張\cite{Zadaianchuk2020}を参考にしており、指令追従とユーザ制約のトレードオフを学習に組み込むために用いる。
 
