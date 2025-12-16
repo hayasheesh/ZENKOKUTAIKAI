@@ -88,16 +88,16 @@
 \fontsize{9pt}{14pt}\selectfont
 
 \section{まえがき}
-バーチャルパワープラント（VPP）の需給調整市場参入では、リソースアグリゲーターが系統運用者から与えられる指令信号に対して、リアルタイムかつ低遅延でリソースを制御し追従する能力が求められる場合がある。一方、EVを多数束ねたVPPを集中最適化で制御する場合、個別EV状態の収集・通信およびオンライン計算がボトルネックとなり、応答レイテンシ制約下では運用が困難になり得る。
+バーチャルパワープラント（VPP）の需給調整市場参入では、リソースアグリゲーターが系統運用者から与えられる指令信号に対して、リアルタイムかつ低遅延でリソースを制御し追従する能力が求められる場合がある。一方、電気自動車（EV）を多数束ねたVPPを集中最適化で制御する場合、個別EV状態の収集・通信およびオンライン計算がボトルネックとなり、応答レイテンシ制約下では運用が困難になり得る。
 
-一方、Multi-Agent Deep Deterministic Policy Gradient (MADDPG) に代表されるMARL（Multi-Agent Reinforcement Learning）はCTDE（Centralized Training and Decentralized Execution）の性質を持ち、実行時に頻繁な全体通信や大規模最適化を要さずに協調方策を実装できる\cite{Lowe2020}。EV群制御にMARLを適用した先行研究として、ユーザ側QoS（充電費用やSoC等）に重点を置くもの\cite{Park2022}や、系統側の指標に重点を置くもの\cite{Fan2022}があるが、双方を同一のMARL枠組みで明示的に最適化・評価する設計は限定的である。
+一方、Multi-Agent Deep Deterministic Policy Gradient (MADDPG) に代表されるMARL（Multi-Agent Reinforcement Learning）はCTDE（Centralized Training and Decentralized Execution）の性質を持ち、実行時に頻繁な全体通信や大規模最適化を要さずに協調方策を実装できる\cite{Lowe2020}。EV群制御にMARLを適用した先行研究として、ユーザ側QoS（充電費用や充電状態（State of Charge: SoC）等）に重点を置くもの\cite{Park2022}や、系統側の指標に重点を置くもの\cite{Fan2022}があるが、双方を同一のMARL枠組みで明示的に最適化・評価する設計は限定的である。
 
 ここで、本稿の貢献は次の2点である。(1) 需給調整市場への参加を想定し、低遅延かつスケーラブルな階層型MADDPG制御を設計した。(2) 日本の需給調整市場を想定したシミュレーション環境にてケーススタディを行い、指令追従率および出発時SoC満足度の両方を評価指標として有効性を検討する。
 
 \section{提案手法}
 
 \subsection{制御モデルの全体像}
-本研究では、VPPを構成する複数の充電ステーションをエージェントとし、各エージェントが当該ステーション配下の複数EVの充放電出力を決定する階層型の構造を採る。図\ref{fig:fig1}のように、学習時はcriticがactorを評価しactorが方策を更新するため中央集権的である。しかし実行時には、各ステーションは（i）自ステーションに接続中EVの状態（SoC、残滞在時間、目標SoC等）と（ii）市場から与えられる指令信号のみを用いて行動し、中央集権的なcriticはこの時利用されていないため、ステーション間の高頻度な個別通信を前提としない。
+本研究では、VPPを構成する複数の充電ステーションをエージェントとし、各エージェントが配下の複数EVの充放電出力を決定する階層型の構造を採る。図\ref{fig:fig1}のように、学習時はcriticがactorを評価しactorが方策を更新するため中央集権的である。しかし実行時には、各ステーションは（i）自ステーションに接続中EVの状態（SoC、残滞在時間、目標SoC等）と（ii）市場から与えられる指令信号のみを用いて行動し、中央集権的なcriticはこの時利用されていないため、ステーション間の高頻度な個別通信を前提としない。
 
 \begin{figure}[H]
     \centering
@@ -107,7 +107,7 @@
 \end{figure}
 
 \subsection{階層型MADDPGの実装}
-本モデルはMADDPG\cite{Lowe2020}を基礎とするが、Zadaianchukらの提唱するDE-MADDPG\cite{Sheikh2020}を参考に、局所目的（出発時SoC）と全体協調（指令追従）を分離して扱うため、ローカルcriticと共有グローバルcriticを併用する。ここでは通常のMADDPGと異なる数式を紹介する。なお以下では $x\in\{\mathrm{L},\mathrm{G}\}$ を用いてローカル／グローバルを統一的に表す。
+本モデルはMADDPG\cite{Lowe2020}を基礎とするが、Zadaianchukらの提唱するDecomposed Multi-Agent Deep Deterministic Policy Gradient (DE-MADDPG)\cite{Sheikh2020}を参考に、局所目的（出発時SoC）と全体協調（指令追従）を分離して扱うため、ローカルcriticと共有グローバルcriticを併用する。ここでは通常のMADDPGと異なる数式を紹介する。なお以下では $x\in\{\mathrm{L},\mathrm{G}\}$ を用いてローカル／グローバルを統一的に表す。
 \begin{gather}
 J_i^{x}(\theta_i)
 =
@@ -132,7 +132,7 @@ Q^{x-}\!\bigl(\zeta^{x\prime}\bigr),
 \qquad 0\le w\le 1.
 \label{eq:mix_update}
 \end{gather}
-式\eqref{eq:obj_unified}はactorの目的関数、式\eqref{eq:td_unified}はcritic学習に用いるTD目標、式\eqref{eq:mix_update}はローカル目的とグローバル目的の更新を重み$w$で凸結合してactorを更新することを表す。ここで $\zeta^{\mathrm{L}}=(o_i,a_i)$、$\zeta^{\mathrm{G}}=(s,a)$ とし、$o_i$ はステーション$i$の局所観測、$s$ は全体状態、$a=(a_1,\dots,a_N)$ はjoint action、$a_i=\mu_i(o_i;\theta_i)$ である。$r^{\mathrm{L}}$ は出発時SoCに関する報酬、$r^{\mathrm{G}}$ は指令追従に関する報酬である。$\mathcal{D}$ はreplay buffer、$Q^{x-}$ はtarget criticであり、$\zeta^{x\prime}$ は次時刻の入力（target actorにより得た次時刻行動を含む）を表す。
+式\eqref{eq:obj_unified}はactorの目的関数、式\eqref{eq:td_unified}はcritic学習に用いるTemporal Difference（TD）目標、式\eqref{eq:mix_update}はローカル目的とグローバル目的の更新を重み$w$で凸結合してactorを更新することを表す。ここで $\zeta^{\mathrm{L}}=(o_i,a_i)$、$\zeta^{\mathrm{G}}=(s,a)$ とし、$o_i$ はステーション$i$の局所観測、$s$ は全体状態、$a=(a_1,\dots,a_N)$ はjoint action、$a_i=\mu_i(o_i;\theta_i)$ である。$r^{\mathrm{L}}$ は出発時SoCに関する報酬、$r^{\mathrm{G}}$ は指令追従に関する報酬である。$\mathcal{D}$ はreplay buffer、$Q^{x-}$ はtarget criticであり、$\zeta^{x\prime}$ は次時刻の入力を表す。
 
 
 \section{ケーススタディ}
@@ -142,13 +142,13 @@ Q^{x-}\!\bigl(\zeta^{x\prime}\bigr),
 satisfaction rate は、各 EV の出発時刻において SoC がユーザの
 設定した目標値以上であった出発事象の割合として定義する。
 また tracking rate は、全 288 ステップの内、VPP 集約出力が指
-令値の許容帯（本研究では日本の需給調整市場仕様に従い入札幅 ×0.1を許容幅とする）内に収まった
-ステップの割合として算出する．
+令値の許容帯（日本の需給調整市場仕様に従い入札幅 ×0.1を許容幅とする）内に収まった
+ステップの割合として算出する。
 
-提案手法は全600エピソードで学習し，バッチサイズ$1024$，割引率$\gamma=0.975$とした．ターゲットネットワークはPolyak平均で更新し，係数はactor/local criticで$\tau=0.02$，global criticで$\tau_{\mathrm{G}}=0.02$とした．学習率はactor $2\times10^{-5}$，local critic $1\times10^{-4}$，global critic $5\times10^{-5}$とし，actorおよびlocal/global criticの隠れ層サイズはいずれも$256$とした．actor更新ではlocal/global criticの評価を重み$w=0.3$で凸結合して用いた．探索はOUノイズ（$\theta=0.15,\sigma=0.5$，gain $=3.0$）と$\varepsilon$-greedyを併用し，OUスケールはエピソード$1$--$500$で$1.0\rightarrow0.2$，$\varepsilon$はエピソード$1$--$100$で$1.0\rightarrow0.05$へ線形減衰させた．
+提案手法は全600エピソードで学習し、バッチサイズ$1024$、割引率$\gamma=0.975$とした。ターゲットネットワークはPolyak平均で更新し、係数はactor、local critic、global criticで$\tau_{\mathrm{G}}=0.02$とした。学習率はactor $2\times10^{-5}$、local critic $1\times10^{-4}$、global critic $5\times10^{-5}$とし、actorおよびlocal/global criticの隠れ層サイズはいずれも$256$とした。actor更新ではlocal/global criticの評価を重み$w=0.3$で凸結合して用いた。探索はOrnstein--Uhlenbeck（OU）ノイズ（$\theta=0.15,\sigma=0.5$、gain $=3.0$）と$\varepsilon$-greedyを併用し、OUスケールはエピソード$1$--$500$で$1.0\rightarrow0.2$、$\varepsilon$はエピソード$1$--$100$で$1.0\rightarrow0.05$へ線形減衰させた。
 
 \section{結果}
-学習の進行に伴う性能指標の推移を図\ref{fig:fig2}に示す。学習の初期段階から指令追従性能が改善し、収束近傍では安定した追従が観察される。収束付近の方策で評価した結果、Target SoC satisfaction rate は 63.5％、charging dispatch tracking rate は 99.5％、discharging dispatch tracking rate は 100.0％ であった．同条件の集中最適化では前述3指標とも100％を達成することを考えると、本手法は一定の成果を示したが、さらなる改善の余地があると考えられる。
+学習の進行に伴う性能指標の推移を図\ref{fig:fig2}に示す。学習の初期段階から指令追従性能が改善し、収束近傍では安定した追従が観察される。収束付近の方策で評価した結果、Target SoC satisfaction rate は 63.5％、charging dispatch tracking rate は 99.5％、discharging dispatch tracking rate は 100.0％ であった。同条件の集中最適化では前述3指標とも100％を達成することを考えると、本手法は一定の成果を示したが、さらなる改善の余地があると考えられる。
 
 \begin{figure}[H]
     \centering
@@ -157,10 +157,7 @@ satisfaction rate は、各 EV の出発時刻において SoC がユーザの
     \label{fig:fig2}
 \end{figure}
 
-代表的なテストエピソードにおけるステーション出力を図\ref{fig:fig3}に示す。ステーション単位の分散実行でありながら、紫の破線により表現される集約出力が、黒の実線で示される系統指令値に追従する協調挙動が得られていることが確認できる．
-
-遅延観点では，本方式は実行時に各ステーションでactorの推論（forward計算）のみを行うため，通信遅延はかからない。また計算遅延もRTX-4080を利用した実測値で数十ms程度に抑えられ，低遅延制御が可能であると考えられる．
-
+代表的なテストエピソードにおけるステーション出力を図\ref{fig:fig3}に示す。ステーション単位の分散実行でありながら、紫の破線により表現される集約出力が、黒の実線で示される系統指令値に追従する協調挙動が得られていることが確認できる。
 \begin{figure}[H]
     \centering
     \includegraphics[width=80mm]{images/fig3.png}
@@ -168,8 +165,11 @@ satisfaction rate は、各 EV の出発時刻において SoC がユーザの
     \label{fig:fig3}
 \end{figure}
 
+遅延観点では、本方式は実行時に各ステーションで得られるローカルな情報のみを基にactorの推論を行うため、通信遅延はかからない。また計算遅延もRTX-4080を利用した実測値で数十ms程度に抑えられ、低遅延制御が可能であると考えられる。
+
+
 \section{まとめ}
-本稿では、需給調整市場におけるEV--VPPの低遅延制御を目的とし、階層型MADDPG制御を示した。ローカルcritic（ユーザ制約）と共有グローバルcritic（指令追従）を併用し、両者の評価に基づく方策更新を重み付きに統合することで、分散実行のまま二目的を同時に扱う枠組みを与えた。結果として、集中最適化と同等性能の指令追従性能を達成したが、EVユーザ満足度には改善の余地が残された。今後は報酬設計や学習手法の改良を通じて、両目的のさらなる両立を目指すと同時に、EVユーザ満足率を100％に近づけるためにルールベース制御を組み合わせたハイブリッド制御の検討を進めるべきだ。また、更に実環境に近いシナリオでの評価や実証実験の展開も行う必要がある。
+本稿では、需給調整市場におけるEV--VPPの低遅延制御を目的とし、階層型MADDPG制御を示した。ユーザ需要と指令追従の両目標に対する評価に基づく方策更新を行うことで、分散実行のまま二目的を同時に扱う枠組みを与えた。結果として集中最適化と同等の指令追従性能を達成したが、ユーザ需要満足度は改善の余地が残された。今後はハイパラの修正等を通じて、両目的の同時100％達成を目指すと同時に、EVユーザ満足率を100％に近づけるためにルールベース制御を組み合わせたハイブリッド制御の検討を進めるべきだ。また、更に実環境に近いシナリオでの評価や実証実験の展開も行う必要がある。
 
 % --- 参考文献 ---
 \begingroup
