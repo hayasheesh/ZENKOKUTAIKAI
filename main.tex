@@ -5,7 +5,14 @@
 \usepackage[T1]{fontenc}
 \usepackage{mathptmx} % 英数字をTimes系に
 \usepackage{float}               % [H]で図を強制配置
-\usepackage[top=30mm, bottom=27mm, left=18mm, right=18mm, columnsep=7mm]{geometry}
+\usepackage[
+  paper=a4paper,
+  top=30mm,
+  bottom=27mm,
+  left=18mm,
+  right=18mm,
+  columnsep=7mm
+]{geometry}
 \usepackage[dvipdfmx]{graphicx}
 \usepackage{secdot}
 \usepackage{caption}
@@ -13,6 +20,7 @@
 \usepackage{cite}
 \usepackage{amsmath,amssymb}
 \usepackage[none]{hyphenat} % 全体のハイフネーション抑止
+\AtBeginDvi{\special{papersize=210mm,297mm}}
 
 % --- 図表と本文の間隔設定 ---
 \setlength{\textfloatsep}{0pt} % ページ上下の図表と本文の間隔
@@ -65,7 +73,8 @@
         \parbox{134mm}{
             \centering
             \fontsize{18pt}{28pt}\selectfont \mcfamily
-            マルチエージェント強化学習によるEV群VPPの充放電協調制御
+            マルチエージェント強化学習による\\
+            EV群VPPの充放電協調制御
         }
 
         \vspace{18pt}
@@ -95,12 +104,12 @@
 
 一方、Multi-Agent Deep Deterministic Policy Gradient (MADDPG) に代表されるMARL（Multi-Agent Reinforcement Learning）はCTDE（Centralized Training and Decentralized Execution）の性質を持ち、実行時に頻繁な全体通信や大規模最適化を要さずに協調方策を実装できる\cite{Lowe2020}。EV群制御にMARLを適用した先行研究として、ユーザ側QoS（充電費用や充電状態（State of Charge: SoC）等）に重点を置くもの\cite{Park2022}や、系統側の指標に重点を置くもの\cite{Fan2022}があるが、双方を同一のMARL枠組みで明示的に最適化・評価する設計は限定的である。
 
-ここで、本稿の貢献は次の2点である。(1) 需給調整市場への参加を想定し、低遅延かつスケーラブルな階層型MADDPG制御を設計した。(2) 日本の需給調整市場を想定したシミュレーション環境にてケーススタディを行い、指令追従率および出発時SoC満足度の両方を評価指標として有効性を検討する。
+ここで、本稿の貢献は次の2点である。(1) 需給調整市場への参加を想定し、低遅延かつスケーラブルな階層型MADDPG制御を設計した。(2) 日本の需給調整市場を想定したシミュレーション環境にてケーススタディを行い、指令追従率および出発時SoC満足度の両方を評価指標として有効性を検討した。
 
 \section{提案手法}
 
 \subsection{制御モデルの全体像}
-本研究では、VPPを構成する複数の充電ステーションをエージェントとし、各エージェントが配下の複数EVの充放電出力を決定する階層型の構造を採る。図\ref{fig:fig1}のように、学習時はcriticがactorを評価しactorが方策を更新するため中央集権的である。しかし実行時には、各ステーションは（i）自ステーションに接続中EVの状態（SoC、残滞在時間、目標SoC等）と（ii）市場から与えられる指令信号のみを用いて行動し、中央集権的なcriticはこの時利用されていないため、ステーション間の高頻度な個別通信を前提としない。
+本研究では、VPPを構成する複数の充電ステーションをエージェントとし、各エージェントが配下の複数EVの充放電出力を決定する階層型の構造を採る。図\ref{fig:fig1}のように、学習時は全知のcriticがactorを評価しactorが方策を更新するため中央集権的である。しかし実行時には、各ステーションは（i）自ステーションに接続中EVの状態（SoC、残滞在時間、目標SoC等）と（ii）市場から与えられる指令信号のみを用いて行動し、中央集権的なcriticはこの時利用されていないため、ステーション間の高頻度な個別通信を前提としない。
 
 \begin{figure}[H]
     \centering
@@ -110,7 +119,7 @@
 \end{figure}
 
 \subsection{階層型MADDPGの実装}
-本モデルはMADDPG\cite{Lowe2020}を基礎とするが、Sheikhらの提唱するDecomposed Multi-Agent Deep Deterministic Policy Gradient (DE-MADDPG)\cite{Sheikh2020}を参考に、局所目的達成度を評価するローカルcriticと全体目的を評価するグローバルcriticを併用する。通常のMADDPGと異なる点は、critic入力を2系統に分解し、ローカル側は局所観測のみに基づく方策評価、グローバル側は全体情報に基づく方策評価を同時に学習する点である。ここでは $x\in\{\mathrm{L}、\mathrm{G}\}$ を用いてローカル／グローバルを統一的に表す。
+本モデルはMADDPG\cite{Lowe2020}を基礎とするが、Sheikhらの提唱するDecomposed Multi-Agent Deep Deterministic Policy Gradient (DE-MADDPG)\cite{Sheikh2020}を参考に、局所目的達成度を評価するローカルcriticと全体目的を評価するグローバルcriticを併用する。通常のMADDPGと異なる点は、critic入力を2系統に分解し、ローカル側は局所観測のみに基づく局所方策評価、グローバル側は全体情報に基づく全体方策評価を同時に学習する点である。ここでは $x\in\{\mathrm{L}、\mathrm{G}\}$ を用いてローカル／グローバルを統一的に表す。
 
 ローカルcriticは $\zeta^{\mathrm{L}}=(o_i、a_i)$ を入力とし、ステーション$i$の局所観測 $o_i$ と行動 $a_i=\mu_i(o_i;\theta_i)$ のみから、局所目標に対する方策の価値 $Q^{\mathrm{L}}(\zeta^{\mathrm{L}})$ を推定する。一方、グローバルcriticは $\zeta^{\mathrm{G}}=(s、a)$ を入力とし、全体状態 $s$ と joint action $a=(a_1、\dots、a_N)$ に基づいて、全体目標に対する価値 $Q^{\mathrm{G}}(\zeta^{\mathrm{G}})$ を推定する。報酬設計としては、$r^{\mathrm{L}}$ に出発時の目標SoC達成度（未達分が大きいほど低評価）を中心に与え、学習を安定化させるために充放電量に比例した整形項を併用する。$r^{\mathrm{G}}$ は指令追従を目的として、要求電力と全ステーション合計電力の偏差に基づき、許容帯域内では正の報酬、帯域外では偏差に応じたペナルティを与える。
 
@@ -142,7 +151,7 @@ actor 更新では local/global critic の評価を重み $w = 0.3$ で凸結合
 探索は OU ノイズと $\varepsilon$-greedy を併用し，強度は学習の進行に合わせて減衰させた。
 
 \section{結果・考察}
-学習の進行に伴う性能指標の推移を図\ref{fig:fig2}に示す。学習の初期段階では両目標が拮抗し、収束近傍では安定して80％以上の指令追従が観察された。収束付近(660)の方策で評価した結果、Target SoC satisfaction rate は 67.1％、Dispatch tracking rate は 88.5％ であった。これは密で低分散な報酬を与える global の勾配が支配しやすく、疎で遅延のある local は信用割当が難しく学習信号が弱くなるため、結果として global 側に偏ると考えられる。同条件の集中最適化では前述2指標とも100％を達成することを考えると、本手法は一定の成果を示したが、さらなる改善の余地があると考えられる。
+学習の進行に伴う性能指標の推移を図\ref{fig:fig2}に示す。学習の初期段階では両目標が拮抗し、収束近傍では安定して80％以上の指令追従が観察された。収束付近(660)の方策で評価した結果、Target SoC satisfaction rate は 67.1％、Dispatch tracking rate は 88.5％ であった。これは整形があるものの、密で低分散な報酬を与える global の勾配の方が支配しやすく、疎で遅延のある local は信用割当が難しく学習信号が弱くなるため、結果として global 側に偏ると考えられる。同条件の集中最適化では前述2指標とも100％を達成することを考えると、本手法は一定の成果を示したが、さらなる改善の余地があると考えられる。
 
 \begin{figure}[H]
     \centering
